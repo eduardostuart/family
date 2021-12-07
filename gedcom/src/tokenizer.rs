@@ -53,6 +53,8 @@ impl<'a> Tokenizer<'a> {
 
         let ref_id = self.get_ref_id();
 
+        self.consume_delimiter();
+
         let tag = self.get_tag();
 
         let (pointer, value) = self.get_line_value();
@@ -105,31 +107,28 @@ impl<'a> Tokenizer<'a> {
     //     pointer:= [(0x40) + alphanum + pointer_string + (0x40) ]
     //       where: (0x40)=@
     pub(self) fn get_ref_id(&mut self) -> Option<String> {
-        let mut ref_id: Option<String> = None;
-
-        if matches!(self.chars.peek(), Some('\x40')) {
-            let mut value = String::new();
-
-            if matches!(self.chars.peek(), Some('\x40')) {
-                value.push('\x40');
-                self.chars.next();
-            };
-
-            while let Some(c) = self.chars.peek() {
-                let c = *c;
-                if !matches!(c, '\x20' | '\n') {
-                    value.push(c);
-                    self.chars.next();
-                } else {
-                    break;
-                }
-            }
-
-            ref_id = Some(value);
-            self.consume_delimiter();
+        if !matches!(self.chars.peek(), Some('\x40')) {
+            return None;
         }
 
-        ref_id
+        let mut value = String::new();
+
+        if matches!(self.chars.peek(), Some('\x40')) {
+            value.push('\x40');
+            self.chars.next();
+        };
+
+        while let Some(c) = self.chars.peek() {
+            let c = *c;
+            if !matches!(c, '\x20' | '\n') {
+                value.push(c);
+                self.chars.next();
+            } else {
+                break;
+            }
+        }
+
+        Some(value)
     }
 
     // The length of the GEDCOM TAG is a maximum of 31 characters,
@@ -162,27 +161,30 @@ impl<'a> Tokenizer<'a> {
     //     where: (0x40)=@
     //   line_item:= [any_char | escape | line_item + any_char | line_item + escape]
     pub(self) fn get_line_value(&mut self) -> (Option<String>, Option<String>) {
+        if !matches!(self.chars.peek(), Some('\x20')) {
+            return (None, None);
+        }
+
+        self.consume_delimiter();
+
         let mut pointer: Option<String> = None;
         let mut value: Option<String> = None;
-        if matches!(self.chars.peek(), Some('\x20')) {
-            self.consume_delimiter();
 
-            if matches!(self.chars.peek(), Some('\x40')) {
-                pointer = self.get_ref_id();
-            } else if !matches!(self.chars.peek(), Some('\x20') | Some('\n')) {
-                let mut line_value = String::new();
+        if matches!(self.chars.peek(), Some('\x40')) {
+            pointer = self.get_ref_id();
+        } else if !matches!(self.chars.peek(), Some('\x20') | Some('\n')) {
+            let mut line_value = String::new();
 
-                while let Some(c) = self.chars.peek() {
-                    let c = *c;
-                    if !matches!(c, '\n') {
-                        line_value.push(c);
-                        self.chars.next();
-                    } else {
-                        break;
-                    }
+            while let Some(c) = self.chars.peek() {
+                let c = *c;
+                if !matches!(c, '\n') {
+                    line_value.push(c);
+                    self.chars.next();
+                } else {
+                    break;
                 }
-                value = Some(line_value);
             }
+            value = Some(line_value);
         }
 
         (pointer, value)
